@@ -85,7 +85,19 @@ app.post('/api/login', async(req, res) => {
 });
 
 //Protected Route === Get user profile
+app.get('/api/profile', authenticateToken, (req, res) => {
+    res.json({user: req.user})
+});
 
+//Admin-only route
+app.get('/api/admin/dashboard', authenticateToken, authorizeRole('admin'), (req, res) => {
+    res.json({message: 'Welcome to admin dashboard!', data: 'secret admin info'})
+});
+
+//Public route : Guest
+app.get('/api/content/guest', (req, res) => {
+    res.json({message: 'Public content for all visitors.'});
+});
 
 function authenticateToken(req, res, next){
     const authHeader = req.headers('authorization');
