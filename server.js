@@ -31,4 +31,67 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`);
+});
+
+let users = [
+    {id: 1, username: 'admin', password: 'admin123', role: 'admin'},
+    {id: 2, username: 'alice', password: 'user123', role: 'user'}
+];
+
+app.post('/api/register', async (req, res) => {
+    const {username, password, role = 'user'} = req.body;
+
+    if(!username || !password){
+        return res.status(400).send('Username and password required!');
+    }
+
+    //Check if user exists
+    const existing = users.find(u => u.username == username);
+    if(existing){
+        return res.status(409).send('User already exists!');
+    }
+
+    //Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = {
+        id: users.length + 1,
+        username,
+        password: hashedPassword,
+        role
+    };
+
+    users.push(newUser);
+    res.status(201).json({message: 'User registered', username, role});
 })
+
+
+//API login
+app.post('/api/login', async(req, res) => {
+    const {username, password} = req.body;
+    const user = users.find(u => u.username == username);
+
+    if(!user || !await bcrypt.compare(password, user.password)){
+        return res.status(401).json({error: 'Invalid credentials'});
+    }
+
+    //Generate JWT token
+    const token = jwt.sign(
+        {id: user.id, username: user.username, role: user.role},
+        SECRET_KEY,
+        {expiresIn : '1h'}
+    );
+
+    res.json({token, user: {username: user.username, role: user.role}})
+});
+
+//Protected Route === Get user profile
+
+
+function authenticateToken(req, res, next){
+    const authHeader = req.headers('authorization');
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if(!token){
+        
+    }
+}
