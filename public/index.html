@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
+    <title>Full-Stack App (Student Build)</title>
+</head>
+<body class="not-authenticated">
+    <nav class="px-3">
+        <p class="fw-medium fs-5">Full-Stack App Genegobis</p>
+        <i class="bi bi-apple"></i>
+        <ul class="nav-list role-logged-out">
+            <li onclick="navigateTo('#/login')">Login</li>
+            <li onclick="navigateTo('#/register')">Register</li>
+        </ul>
+        
+        <div class="dropdown role-logged-in">
+            <button id="role" class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"></button>
+                <ul class="dropdown-menu">
+                    <li onclick="navigateTo('#/profile')"><a class="dropdown-item">Profile</a></li>
+                    <li onclick="navigateTo('#/employees')"class="role-admin" ><a class="dropdown-item">Employees</a></li>
+                    <li onclick="navigateTo('#/accounts')"class="role-admin"><a class="dropdown-item">Accounts</a></li>
+                    <li onclick="navigateTo('#/departments')"class="role-admin"><a class="dropdown-item">Departments</a></li>
+                    <li onclick="navigateTo('#/requests')"><a class="dropdown-item">My Requests</a></li>
+                    <li onclick="handleLogout()"><a class="dropdown-item text-danger">Logout</a></li>
+                </ul>
+        </div>
+    </nav>
+    <main class="container">
+       <div id="toast-el" role="toast" class="toast position-fixed p-2" data-bs-delay="3000">
+        <div class="toast-body d-flex">
+            <div role="alert" id="toast-msg" class=" text-white fw-bold"></div>
+            <button type="button" class="btn-close btn-close-black me-2 m-auto text-white fw-bold" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+            
+       </div>
+        <section id="home-page" class="page active role-logged-out">
+            <h2>Welcome to Full-Stack App</h2>
+            <p>A static prototype before backend integration. Simualtes:</p>
+            <ul class="mb-4">
+                <li>Email registration + fake verification</li>
+                <li>Login with JWT-like token simulation</li>
+                <li>Role-based UI (Admin/User)</li>
+                <li>CRUD for Employees, Departments, Requests</li>
+            </ul>
+
+            <div class="alert alert-info d-flex align-items-center mb-3" role="alert">
+                <i class="bi bi-info-circle me-2"></i>
+                <div>
+                    <strong>Note:</strong> All data is stored in <code>localStorage</code>. Data persists on refresh.
+                </div>
+            </div>
+            <div class="buttons-div">
+                <button class="btn-primary" id="get-started-btn">Get Started <i class="bi bi-arrow-right"></i></button>
+            </div>
+            
+        </section>
+
+        <section id="register-page" class="page role-logged-out">
+            <h2>Register Account</h2>
+            <form action="post" id="registration-form" class="mt-3">
+                <label for="firstName">First Name</label>
+                <input id="firstName" name="firstName" type="text">
+                <div class="text-danger input-msg"></div>
+
+                <label for="lastName">Last Name</label>
+                <input id="lastName" name="lastName" type="text" class="form-input">
+                <div class="text-danger input-msg"></div>
+
+                <label for="email">Email</label>
+                <input id="email" name="email" type="text">
+                <div id="email-error-msg" class="text-danger input-msg"></div>
+
+                <label for="password">Password</label>
+                <div class="position-relative">
+                    <input id="register-password" name="password" type="password">
+                    <div id="pass-error-msg" class="text-danger input-msg"></div>
+                    <button type="button"  id="toggleRegisterPassword" class="position-absolute end-0 top-0"><span class="bi bi-eye text-black"></span></button>
+                </div>
+                
+                <!-- <p id="pass-error-msg" class="hide-msg text-danger">Password must be at least 6 characters long!</p> -->
+
+                <div class="buttons-div">
+                    <button type="submit" class="btn-primary">Sign Up</button>
+                    <button type="button" id="cancel-register-btn" class="btn-outline-secondary">Cancel</button>
+                </div>
+                </div>
+            </form>
+        </section>
+
+        <section id="verify-email-page" class="page role-logged-out">
+            <h2>Verify Your Email</h2>
+            <div class="alert alert-success mt-3" role="alert">
+                <i class="bi bi-envelope-fill me-2"></i>
+                A verification link has been sent to 
+                <strong id="unverified-email"></strong>
+            </div>
+            <p>For demo purposes, click below to simulate verification:</p>
+            <div class="buttons-div">
+                <button id="verification-btn" class="btn-success text-white">Simulate Email Verification</button>
+                <button class="btn-outline-secondary">Go to Login</button>
+            </div>
+        </section>
+
+        <section id="login-page" class="page">
+            <h2>Login</h2>
+            <!-- <div id="login-invalid" class="hide-msg">
+                <p>Invalid credentials!</p>
+            </div> -->
+            <div id="email-verified-msg" 
+                class="alert alert-success mt-3 hide-msg" 
+                role="alert">
+                <i class="bi bi-check-circle-fill me-2"></i>
+                Email verified! You may now log in.
+            </div>
+            <form action="" id="login-form">
+                <label for="email">Email</label>
+                <input id="email" name="email" type="text">
+                <div id="email-error-msg" class="text-danger input-msg"></div>
+
+                <label for="password">Password</label>
+                <div class="position-relative">
+                    <input id="login-password" name="password" type="password">
+                    <div id="pass-error-msg" class="text-danger input-msg" ></div>
+
+                    <button type="button" 
+                            id="toggleLoginPassword"
+                            class="position-absolute end-0 top-0">
+                        <span class="bi bi-eye text-black"></span>
+                    </button>
+                </div>
+
+                <div class="buttons-div">
+                    <button type="submit" class="btn-primary">Login</button>
+                    <button type="button" id="login-cancel-btn" class="btn-outline-secondary">Cancel</button>
+                </div>
+            </form>
+        </section>
+
+        <section id="profile-page" class="page role-logged-in container py-4">
+            <h3 class="mb-4">My Profile</h3>
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="fw-bold mb-3">
+                        <span id="first-name"></span>
+                        <span id="last-name"></span>
+                    </h4>
+
+                    <p class="mb-2">
+                        <strong>Email:</strong>
+                        <span id="profile-email"></span>
+                    </p>
+
+                    <p class="mb-3">
+                        <strong>Role:</strong>
+                        <span id="profile-role"></span>
+                    </p>
+
+                    <button class="btn btn-outline-primary btn-sm" onclick="editProfile()">
+                        Edit Profile
+                    </button>
+                </div>
+            </div>
+        </section>
+
+
+        <section id="employees-page" class="page">
+            <div class="page-header">
+                <h2>Employees</h2>
+                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#employees-modal" id="employees-modal-btn">+ Add Employee</button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Position</th>
+                        <th>Dept</th>
+                        <th>Actions</th>
+                    </thead>
+                    <tbody  id="employees-tbody">
+
+                    </tbody>
+                </table>
+            </div>
+            
+
+            <div class="modal" id="employees-modal">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h4 class="modal-title" id="employee-modal-title"></h4>
+                        </div>
+
+                        <div class="modal-body">
+                            <div id="employee-form-msg-div" class="hide-msg form-msg border-danger text-danger">
+                                
+                            </div>
+                            
+                            <form action="" id="employees-form">
+                                <label for="">Employee ID<span class="text-danger">*</span>
+                                    <input type="text" name="id">
+                                    <span></span>
+                                </label>
+
+                                <label for="">User email <span class="text-danger">*</span>
+                                    <input type="email" name="email" >
+                                    <span id="employee-email"></span>
+                                </label>
+
+                                <label for="">Position <span class="text-danger">*</span>
+                                    <input type="text" name="position">
+                                    <span></span>
+                                </label>
+
+                                <label for="">Department <span class="text-danger">*</span>
+                                    <select name="deptId">
+                                        
+                                    </select>
+                                    <span></span>
+                                </label>
+
+                                <label for="">Hire Date <span class="text-danger">*</span>
+                                    <input type="date" name="hireDate">
+                                    <span></span>
+                                </label>
+                            </form>
+                        </div>
+
+                        <div class="modal-footer">
+                            <div class="buttons-div">
+                                <button id="save-employee" class="btn-primary">Save</button>
+                                <button  class="btn-outline-secondary" data-bs-dismiss="modal" id="employee-cancel-btn" onclick="resetInputs(employeesForm)">Cancel</button>
+                            </div>
+                        </div>
+                
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="departments-page" class="role-logged-in page ">
+            <div class="page-header">
+                <h2>Departments</h2>
+                <button class="btn btn-success" onclick="addDepartment()">+ Add Department</button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </thead>
+                    <tbody id="dept-tbody">
+
+                    </tbody>
+                </table>
+            </div>
+            
+        </section>
+
+        <section id="accounts-page" class="role-logged-in page ">
+            <div class="page-header">
+                <h2>Accounts</h2>
+                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#accounts-modal" id="accounts-modal-btn">+ Add Account</button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Verified</th>
+                        <th>Actions</th>
+                    </thead>
+                    <tbody id="accounts-tbody">
+                        
+                    </tbody>
+                </table>
+            </div>
+            
+
+            <div class="modal" id="accounts-modal">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2 class="modal-title fs-5">+ New Request</h2>
+                        </div>
+
+                        <div class="modal-body">
+                            <div id="form-message-div" class="hide-msg">
+                                
+                            </div>
+
+                            <form id="accounts-form">
+                                <label for="firstName">
+                                    First name <span class="text-danger">*</span>
+                                </label>
+                                <input id="firstName" name="firstName" type="text">
+                                <div class="text-danger input-msg"></div>
+
+
+                                <label for="lastName">
+                                    Last name <span class="text-danger">*</span>
+                                </label>
+                                <input id="lastName" name="lastName" type="text">
+                                <div class="text-danger input-msg"></div>
+
+
+                                <label for="email">
+                                    Email <span class="text-danger">*</span>
+                                </label>
+                                <input id="email" type="text" name="email">
+                                <div id="acc-email" class="text-danger input-msg"></div>
+
+
+                                <div id="account-label-pass">
+                                    <label for="password">
+                                        Password <span class="text-danger">*</span>
+                                    </label>
+
+                                    <div class="position-relative">
+                                        <input id="account-password" type="password" name="password" style="padding-right: 35px;">
+                                        <div id="account-pass-msg" class="text-danger input-msg"></div>
+                                        <button type="button"
+                                                id="toggleAccountPassword"
+                                                class="position-absolute top-0 end-0">
+                                            <span id="eyeIcon" class="bi bi-eye text-black"></span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                
+
+
+                                <label for="role">
+                                    Role <span class="text-danger">*</span>
+                                </label>
+                                <select id="role" name="role">
+                                    <option value="user">User</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                                <div class="text-danger input-msg"></div>
+
+
+                                <label for="verified-field">
+                                    <input type="checkbox" id="verified-field" value="true">
+                                    Verified
+                                    <div class="text-danger input-msg"></div>
+                                </label>
+                                
+
+                            </form>
+                        </div>
+
+                        <div class="modal-footer">
+                            <div class="buttons-div">
+                                <button  id="save-account" class="btn-primary" >Save</button>
+                                <button class="btn-outline-secondary" data-bs-dismiss="modal" onclick="resetInputs(accountsForm)" id="accounts-cancel-btn">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            </div>
+        </section>
+
+        <section id="requests-page" class="role-logged-in page">
+            <div class="page-header">
+                <h2>My Requests</h2>
+                <button class="btn btn-success" data-bs-target="#request-modal" data-bs-toggle="modal" id="requests-modal-btn">+ New Request</button>
+            </div>
+
+            <div id="no-requests-div" class="mt-5">
+                <p>No requests found. </p>
+                <button data-bs-target="#request-modal" data-bs-toggle="modal" id="requests-modal-btn" class="btn-success">Create One</button>
+            </div>
+
+            <div class="table-responsive hide-msg" id="requests-table">
+                <table class="table table-striped">
+                    <thead>
+                        <th>Request ID</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                    </thead>
+                    <tbody id="requests-tbody">
+
+                    </tbody>
+                </table>
+            </div>
+            
+
+            <div class="modal" id="request-modal">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2 class="modal-title fs-5" id="exampleModalLabel" onclick="hideMsg()">New Request</h2>
+                        </div>
+
+                        <div class="modal-body">
+                            <form action="">
+                                <label for="">Type
+                                    <select name="" id="equipment-type" name="type">
+                                        <option value="Equipment">Equipment</option>
+                                        <option value="Leave">Leave</option>
+                                        <option value="Resources">Resources</option>
+                                    </select>
+                                </label>
+
+                                <label for="">Items</label>
+                                <div id="requests-msg-div" class="form-msg hide-msg">
+
+                                </div>
+                            </form>
+
+                            <div id="item-requests-div">
+                                <div class="item-div" id="1">
+                                    <input type="text" class="itemName" placeholder="Item Name">
+                                    <input type="number" min="1" class="itemQty" placeholder="Qty">
+                                    <button type="button" class="btn btn-success" onclick="addNewItem()">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <div class="buttons-div">
+                                <button id="save-request"  class="btn-primary">Save</button>
+                                <button class="btn-outline-secondary" data-bs-dismiss="modal" id="request-close-btn" onclick="hideMsg()">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </section>
+
+
+    </main>
+    <!-- <script src="https://cdn.jsdelivr.net" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script> -->
+    <script src="script.js"></script>
+</body>
+</html>

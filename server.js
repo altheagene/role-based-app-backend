@@ -14,7 +14,8 @@ app.use(cors({
 //====================== MIDDLEWARE ==========================
 
 //parse JSON
-app.use(express.json());            
+app.use(express.json());
+
 
 //log incoming requests
 app.use((req, res, next) => {
@@ -34,19 +35,33 @@ app.listen(PORT, () => {
 });
 
 let users = [
-    {id: 1, username: 'admin', password: 'admin123', role: 'admin'},
-    {id: 2, username: 'alice', password: 'user123', role: 'user'}
+    {id: 1, firstName: 'Billie', lastName: 'Dove', email: 'admin@example.com', password: '$2a$10$.w1V1HnyIEAL.RuAbrZXNOsofSlcBxvxgNszEgXxhzxhLyWTF3DPa', role: 'admin'}
 ];
 
-app.post('/api/register', async (req, res) => {
-    const {username, password, role = 'user'} = req.body;
+let departments = [
+    {
+        deptId: 1,
+        name: 'Engineering',
+        description: 'Department of Engineering'
+    },
+    {
+        deptId: 2,
+        name: 'Human Resources',
+        description: 'Department of Human Resources'
+    }
+]
 
-    if(!username || !password){
-        return res.status(400).send('Username and password required!');
+
+
+app.post('/api/register', async (req, res) => {
+    const {firstName, lastName, email, password, role = 'user'} = req.body;
+
+    if(!firstName || !lastName || !email || !password){
+        return res.status(400).send('First name, lastname, email, and password required!');
     }
 
     //Check if user exists
-    const existing = users.find(u => u.username == username);
+    const existing = users.find(u => u.email == email);
     if(existing){
         return res.status(409).send('User already exists!');
     }
@@ -55,20 +70,41 @@ app.post('/api/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = {
         id: users.length + 1,
-        username,
+        firstName,
+        lastName,
+        email,
         password: hashedPassword,
+        verified: false,
         role
     };
 
     users.push(newUser);
-    res.status(201).json({message: 'User registered', username, role});
+    console.log(users)
+    res.status(201).json({message: 'User registered', email, role});
+})
+
+//verify registration email
+app.post('/api/verifyemail', (req, res) => {
+    const {unverifiedEmail} = req.body;
+
+    const user = users.find(u => u.email == unverifiedEmail);
+    console.log(user)
+    if(user){
+        if(!user.verified){
+            user.verified = true;
+            return res.status(201).json({message: 'Email verified!', success : true})
+        }
+    }else{
+        return res.status(401).json({message: 'User not found!'})
+    }
 })
 
 
 //API login
 app.post('/api/login', async(req, res) => {
-    const {username, password} = req.body;
-    const user = users.find(u => u.username == username);
+    const {email, password} = req.body;
+    console.log(email + ' ' + password)
+    const user = users.find(u => u.email == email);
 
     if(!user || !await bcrypt.compare(password, user.password)){
         return res.status(401).json({error: 'Invalid credentials'});
@@ -76,18 +112,25 @@ app.post('/api/login', async(req, res) => {
 
     //Generate JWT token
     const token = jwt.sign(
-        {id: user.id, username: user.username, role: user.role},
+        {id: user.id, email: user.email, role: user.role},
         SECRET_KEY,
         {expiresIn : '1h'}
     );
 
-    res.json({token, user: {username: user.username, role: user.role}})
+    res.json({token, user: {email: user.email, role: user.role}})
 });
+
 
 //Protected Route === Get user profile
 app.get('/api/profile', authenticateToken, (req, res) => {
-    res.json({user: req.user})
+    const user = users.find(u => u.email == req.user.email);
+    res.json({user: user})
 });
+
+app.get('api/departments', authenticateToken, (req, res) => {
+    res.json({departments})
+})
+
 
 //Admin-only route
 app.get('/api/admin/dashboard', authenticateToken, authorizeRole('admin'), (req, res) => {
@@ -100,7 +143,7 @@ app.get('/api/content/guest', (req, res) => {
 });
 
 function authenticateToken(req, res, next){
-    const authHeader = req.headers('authorization');
+    const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if(!token){
