@@ -148,75 +148,11 @@ toggleAccount.addEventListener("click", () => {
 
 let currentUser = null;
 window.location.hash = '#/'
-const STORAGE_KEY = 'ipt_demo_v1'
-window.db = {
-    accounts:[],
-    departments: [],
-    employees: [],
-    requests: []
-}
 
 let editing = false;
 let editingEmail;
 let itemRequests = [];
 let unverifiedEmail;
-
-
-loadFromStorage();
-
-
-
-function loadFromStorage(){    
-    if (localStorage[STORAGE_KEY] == undefined){
-        window.db.departments.push(
-            {
-                deptId: 1,
-                name: 'Engineering',
-                description: 'Department of Engineering'
-            }, 
-            {
-                deptId: 2,
-                name: 'HR',
-                description: 'Department of Human Resources'
-            })
-        window.db.accounts.push({
-            userId: 1,
-            firstName: 'Admin',
-            lastName: 'User',
-            email: 'admin@example.com',
-            password: 'Password123!',
-            verified: true,
-            role: 'admin'
-        })
-        saveToStorage();
-        
-    }else{
-       
-        const data = JSON.parse(localStorage[STORAGE_KEY])
-        window.db.accounts = data.accounts;
-        window.db.departments = data.departments;
-        window.db.employees = data.employees;
-        window.db.requests = data.requests;
-    }
-
-    if(localStorage.auth_token !=undefined){
-        currentUser = window.db.accounts.find(account => account.email == localStorage.auth_token);
-        body.classList.remove('not-authenticated')
-        body.classList.add('authenticated')
-        document.getElementById('role').textContent = currentUser.firstName;
-        if(currentUser.role == 'admin'){
-            body.classList.add('is-admin')
-        }
-        navigateTo('#/profile')
-    }
-}
-
-function saveToStorage(){
-    localStorage[STORAGE_KEY]  = JSON.stringify(window.db)
-}
-
-
-
 
 
 const qtyInputs = document.querySelectorAll('.itemQty')
@@ -294,9 +230,6 @@ function handleRouting(){
                         renderRequests();
                         currentPage = requestsPage; break;
         case '#/employees' : 
-                        if(currentUser.role != 'admin')
-                            return;
-                        currentPage = employeesPage; 
                         renderDeptDropdown();
                         renderEmployees();
                         break;
@@ -306,11 +239,9 @@ function handleRouting(){
                         currentPage = accountsPage; 
                         renderAccounts();
                         break;
-        case '#/departments' : 
-                        if(currentUser.role != 'admin')
-                            return;
+        case '#/departments' :
                         renderDepartments();
-                        currentPage = departmentsPage; break;
+                        break;
     }
 
     currentPage.classList.add('active')
@@ -337,7 +268,7 @@ function checkEmpty(inputs){
 
 
 async function setAuthState(isAuth, user){
-    currentUser = user;
+    currentUser = user.user;
     if(isAuth){
         body.classList.remove('not-authenticated');
         body.classList.add('authenticated');
@@ -684,27 +615,43 @@ function deleteAccount(email){
     }
 }
 
-function renderAccounts(){
+async function renderAccounts(){
     const tbody = document.getElementById('accounts-tbody');
     tbody.innerHTML = ''
 
-    for (let account of window.db.accounts){
-        const element = `
-            <tr>
-                <td>${account.firstName} ${account.lastName}</td>
-                <td>${account.email}</td>
-                <td>${account.role == 'admin' ? 'Admin' : 'User'}</td>
-                <td>${account.verified ? '✅' : ' ❌'}</td>
-                <td>
-                    <button class="btn btn-outline-primary" onclick="editAccount('${account.email}')">Edit</button>
-                    <button class="btn btn-outline-warning" onclick="resetPassword('${account.email}')">Reset Password</button>
-                    <button class="btn btn-outline-danger" onclick="deleteAccount('${account.email}')">Delete</button>
-                </td>
-            </tr>
-        `
+    const response = await fetch(`${server}/api/admin/accounts`,
+        {
+            method: 'POST',
+            headers: getAuthHeader()
+        }
+    )
 
-        tbody.innerHTML += element;
+    const data = await response.json()
+
+    if(response.ok){
+        for (let account of data.accounts){
+            const element = `
+                <tr>
+                    <td>${account.firstName} ${account.lastName}</td>
+                    <td>${account.email}</td>
+                    <td>${account.role == 'admin' ? 'Admin' : 'User'}</td>
+                    <td>${account.verified ? '✅' : ' ❌'}</td>
+                    <td>
+                        <button class="btn btn-outline-primary" onclick="editAccount('${account.email}')">Edit</button>
+                        <button class="btn btn-outline-warning" onclick="resetPassword('${account.email}')">Reset Password</button>
+                        <button class="btn btn-outline-danger" onclick="deleteAccount('${account.email}')">Delete</button>
+                    </td>
+                </tr>
+            `
+
+            tbody.innerHTML += element;
+        }
+
+        currentPage = accountsPage;
+    }else{
+        console.log('ERROR. Unauthorized access!')
     }
+    
 }
 
 // ==================== EMPLOYEES-JS =======================
@@ -788,38 +735,52 @@ function deleteEmployee(id){
     renderEmployees();
 }
 
-function renderEmployees(){
+async function renderEmployees(){
     const tbody = document.getElementById('employees-tbody');
     tbody.innerHTML =''
-    if(window.db.employees.length == 0){
-        const element = `
-            <tr>
-              <td colspan='5' class='text-center'>No employees found</td>  
-            </tr>
-        `;
 
-        tbody.innerHTML = element;
-        return;
-        
-    }
-    for(let employee of window.db.employees){
-        const user = window.db.accounts.find(acc => acc.userId == employee.userId);
-        const department = window.db.departments.find(dept => dept.deptId == employee.deptId)
-        const element = `
-            <tr>
-                <td>${employee.id}</td>
-                <td>${user.firstName} ${user.lastName}</td>
-                <td>${employee.position}</td?>
-                <td>${department.name}</td>
-                <td>
-                    <button class="btn btn-outline-primary" onclick="editEmployee(${employee.userId})">Edit</button>
-                    <button class="btn btn-outline-warning" onclick="deleteEmployee(${employee.userId})">Delete</button>
-                </td>
-            </tr>
-        `
+    const response = await fetch(`${server}/api/admin/employees`, 
+        {
+            method: 'GET',
+            headers: getAuthHeader()
+        }
+    )
 
-        tbody.innerHTML += element
+    const data = await response.json()
+
+    if(response.ok){
+        if(data.employees.length == 0){
+            const element = `
+                <tr>
+                <td colspan='5' class='text-center'>No employees found</td>  
+                </tr>
+            `;
+
+            tbody.innerHTML = element;
+            return;
+            
+        }
+        for(let employee of data.employees){
+            const user = window.db.accounts.find(acc => acc.userId == employee.userId);
+            const department = window.db.departments.find(dept => dept.deptId == employee.deptId)
+            const element = `
+                <tr>
+                    <td>${employee.id}</td>
+                    <td>${user.firstName} ${user.lastName}</td>
+                    <td>${employee.position}</td?>
+                    <td>${department.name}</td>
+                    <td>
+                        <button class="btn btn-outline-primary" onclick="editEmployee(${employee.userId})">Edit</button>
+                        <button class="btn btn-outline-warning" onclick="deleteEmployee(${employee.userId})">Delete</button>
+                    </td>
+                </tr>
+            `
+
+            tbody.innerHTML += element
+        }
+        currentPage = employeesPage
     }
+    
 }
 
 function renderDeptDropdown(){
@@ -988,7 +949,7 @@ function addDepartment(){
 }
 
 async function renderDepartments(){
-    const response = await fetch(`${server}/api/departments`,
+    const response = await fetch(`${server}/api/admin/departments`,
         {
             method: 'GET',
             headers: getAuthHeader()
@@ -996,7 +957,7 @@ async function renderDepartments(){
     )
 
     const data = await response.json();
-
+    console.log(response.ok)
     if(response.ok){
         const departments = data.departments;
         const tbody = document.getElementById('dept-tbody');
@@ -1016,6 +977,8 @@ async function renderDepartments(){
 
             tbody.innerHTML += element;
         }
+
+        currentPage = departmentsPage;
     }else{
         console.log('ERROR')
     }

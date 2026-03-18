@@ -35,7 +35,8 @@ app.listen(PORT, () => {
 });
 
 let users = [
-    {id: 1, firstName: 'Billie', lastName: 'Dove', email: 'admin@example.com', password: '$2a$10$.w1V1HnyIEAL.RuAbrZXNOsofSlcBxvxgNszEgXxhzxhLyWTF3DPa', role: 'admin'}
+    {id: 1, firstName: 'Billie', lastName: 'Dove', email: 'admin@example.com', password: '$2a$10$.w1V1HnyIEAL.RuAbrZXNOsofSlcBxvxgNszEgXxhzxhLyWTF3DPa', role: 'admin'},
+    {id: 2, firstName: 'Althea', lastName: 'Genegobis', email: 'altheagenegobis2022@gmail.com', password: '$2a$10$.N52yJYLpjB.XOzcziYBbetUQIjrJzQ4tPhdqu2sbOZquL9i2PIiS', role: 'user'}
 ];
 
 let departments = [
@@ -48,6 +49,14 @@ let departments = [
         deptId: 2,
         name: 'Human Resources',
         description: 'Department of Human Resources'
+    }
+]
+
+let employees = []
+
+let requests = [
+    {
+        //input dummy data
     }
 ]
 
@@ -127,10 +136,24 @@ app.get('/api/profile', authenticateToken, (req, res) => {
     res.json({user: user})
 });
 
-app.get('api/departments', authenticateToken, (req, res) => {
+app.get('/api/requests', authenticateToken, (req, res) => {
+    const user = req.user;
+    const requests = requests.filter(r => r.email == user.email);
+
+    res.json({requests})
+})
+
+app.get('/api/admin/departments', authenticateToken, authorizeRole('admin'), (req, res) => {
     res.json({departments})
 })
 
+app.get('/api/admin/employees', authenticateToken, authorizeRole('admin'), (req, res) => {
+    res.json({employees})
+})
+
+app.get('/api/admin/accounts', authenticateToken, authorizeRole('admin', (rew, res) => {
+    res.json({users})
+}))
 
 //Admin-only route
 app.get('/api/admin/dashboard', authenticateToken, authorizeRole('admin'), (req, res) => {
