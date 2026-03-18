@@ -153,6 +153,7 @@ let editing = false;
 let editingEmail;
 let itemRequests = [];
 let unverifiedEmail;
+let departments;
 
 
 const qtyInputs = document.querySelectorAll('.itemQty')
@@ -207,11 +208,12 @@ function showToast(message, boolValue){
     myToast.show()
 }
 
-function handleRouting(){
+async function handleRouting(){
     const hash = window.location.hash;
     currentPage.classList.remove('active');
-
+    let success;
     switch (hash){
+        
         case '#/': currentPage = homePage;break;
         case '#/login': 
             resetInputs(loginForm)
@@ -223,27 +225,40 @@ function handleRouting(){
                                 document.getElementById('unverified-email').innerText = unverifiedEmail
                                 break;
         case '#/profile' : 
-                        currentPage = profilePage; 
-                        renderProfile();
+                         success = await renderProfile();
+                        if(success){
+                            currentPage = profilePage;
+                        }
                         break;
         case '#/requests' : 
-                        renderRequests();
-                        currentPage = requestsPage; break;
+                        success = await renderRequests();
+                        if(success){
+                            currentPage = requestsPage;
+                        }
+
+                        break;
+                        
         case '#/employees' : 
-                        renderDeptDropdown();
-                        renderEmployees();
+                        success = await renderEmployees();
+                        if(success){
+                            renderDeptDropdown();
+                            currentPage = employeesPage;
+                        }
                         break;
         case '#/accounts' : 
-                        if(currentUser.role != 'admin')
-                            return;
-                        currentPage = accountsPage; 
-                        renderAccounts();
+                        success = await renderAccounts();
+                        if(success){
+                            currentPage = accountsPage;
+                        }
                         break;
         case '#/departments' :
-                        renderDepartments();
+                         success = await renderDepartments();
+                        if(success){
+                            currentPage = departmentsPage;
+                        }
                         break;
     }
-
+    console.log(currentPage)
     currentPage.classList.add('active')
 }
 
@@ -288,7 +303,6 @@ async function setAuthState(isAuth, user){
 
         if(response.ok){
             user = response.user
-            navigateTo('#/profile');
         }
 
         document.getElementById('role').textContent = data. user.firstName;
@@ -299,6 +313,8 @@ async function setAuthState(isAuth, user){
         }else{
             body.classList.remove('is-admin');
         }  
+
+        navigateTo('#/profile');
     }else{
         body.classList.remove('authenticated');
         body.classList.add('not-authenticated');
@@ -435,7 +451,12 @@ async function renderProfile(){
         document.getElementById('last-name').innerText = data.user.lastName
         document.getElementById('profile-email').innerText = data.user.email;
         document.getElementById('profile-role').innerText = data.user.role;
+
+        return true;
+        
     }
+
+    return false;
     
 }
 
@@ -621,15 +642,15 @@ async function renderAccounts(){
 
     const response = await fetch(`${server}/api/admin/accounts`,
         {
-            method: 'POST',
+            method: 'GET',
             headers: getAuthHeader()
         }
     )
 
     const data = await response.json()
-
+    console.log(data)
     if(response.ok){
-        for (let account of data.accounts){
+        for (let account of data.users){
             const element = `
                 <tr>
                     <td>${account.firstName} ${account.lastName}</td>
@@ -645,11 +666,13 @@ async function renderAccounts(){
             `
 
             tbody.innerHTML += element;
+
+            return true;
         }
 
-        currentPage = accountsPage;
     }else{
         console.log('ERROR. Unauthorized access!')
+        return false;
     }
     
 }
@@ -747,7 +770,6 @@ async function renderEmployees(){
     )
 
     const data = await response.json()
-
     if(response.ok){
         if(data.employees.length == 0){
             const element = `
@@ -757,7 +779,7 @@ async function renderEmployees(){
             `;
 
             tbody.innerHTML = element;
-            return;
+            return true;
             
         }
         for(let employee of data.employees){
@@ -778,14 +800,34 @@ async function renderEmployees(){
 
             tbody.innerHTML += element
         }
-        currentPage = employeesPage
+        console.log('IM HERE')
+        return true;
+    }else{
+        return false;
     }
     
 }
 
-function renderDeptDropdown(){
-     employeesForm.elements['deptId'].innerHTML = ''
-    for(let department of window.db.departments){
+async function renderDeptDropdown(){
+
+    //fetch departments
+    const response = await fetch(`${server}/api/admin/departments`,
+        {
+            method: 'GET',
+            headers: getAuthHeader()
+        }
+    )
+
+    const data = await response.json()
+
+    if(response.ok){
+        departments = data.departments;
+    }
+
+
+    //display departments dropdown
+    employeesForm.elements['deptId'].innerHTML = ''
+    for(let department of departments){
         const element = `
             <option value=${department.deptId}>${department.name}</option>
         `
@@ -796,45 +838,49 @@ function renderDeptDropdown(){
 
 // ==================== REQUESTS-JS =========================
 
-function renderRequests(){
-    const myRequests = window.db.requests.filter(req => req.employeeEmail == currentUser.email)
-
+async function renderRequests(){
     const tbody = document.getElementById('requests-tbody');
     tbody.innerHTML = ''
 
-    // if(myRequests.length == 0){
-    //     const element = `
-    //         <tr>
-    //           <td colspan='5' class='text-center'>No requests found</td>  
-    //         </tr>
-    //     `;
+    const response = await fetch(`${server}/api/requests`,
+        {
+            method: 'GET',
+            headers: getAuthHeader()
+        }
+    )
 
-    //     tbody.innerHTML = element;
-    //     return;
-    // }
+    const data = await response.json();
 
-    if(myRequests.length > 0){
-        document.getElementById('no-requests-div').classList.add('hide-msg')
-        document.getElementById('requests-table').classList.remove('hide-msg')
-        for (let request of myRequests){
-            const element = `
-                <tr>
-                    <td>${request.requestId}</td>
-                    <td>${request.type}</td>
-                    <td>${request.date}</td>
-                    <td><span class="badge ${request.status == 'Pending' ? "bg-warning" : 
-                        request.status == 'Approved' ? 'bg-success' : 'bg-danger'
-                    }">${request.status} </span></td>
+    if(response.ok){
+        if(data.myRequests.length > 0){
+            document.getElementById('no-requests-div').classList.add('hide-msg')
+            document.getElementById('requests-table').classList.remove('hide-msg')
+            for (let request of myRequests){
+                const element = `
+                    <tr>
+                        <td>${request.requestId}</td>
+                        <td>${request.type}</td>
+                        <td>${request.date}</td>
+                        <td><span class="badge ${request.status == 'Pending' ? "bg-warning" : 
+                            request.status == 'Approved' ? 'bg-success' : 'bg-danger'
+                        }">${request.status} </span></td>
 
-                </tr>
-            `
+                    </tr>
+                `
+                tbody.innerHTML += element;
+            }     
+        }else{
+            document.getElementById('no-requests-div').classList.remove('hide-msg')
+            document.getElementById('requests-table').classList.add('hide-msg')
+        }
 
-            tbody.innerHTML += element
-        }   
+        return true;
     }else{
-        document.getElementById('no-requests-div').classList.remove('hide-msg')
-        document.getElementById('requests-table').classList.add('hide-msg')
+        console.log('ERROR!')
+        return false;
     }
+
+    
     
 }
 
@@ -957,7 +1003,8 @@ async function renderDepartments(){
     )
 
     const data = await response.json();
-    console.log(response.ok)
+    departments = data.departments;
+    console.log(data)
     if(response.ok){
         const departments = data.departments;
         const tbody = document.getElementById('dept-tbody');
@@ -978,9 +1025,10 @@ async function renderDepartments(){
             tbody.innerHTML += element;
         }
 
-        currentPage = departmentsPage;
+       return true;
     }else{
-        console.log('ERROR')
+        console.log('ERROR');
+        return false;
     }
     
 }

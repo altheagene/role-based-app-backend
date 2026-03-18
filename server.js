@@ -130,6 +130,8 @@ app.post('/api/login', async(req, res) => {
 });
 
 
+// ======================  GET ROUTES ===========================
+
 //Protected Route === Get user profile
 app.get('/api/profile', authenticateToken, (req, res) => {
     const user = users.find(u => u.email == req.user.email);
@@ -138,9 +140,9 @@ app.get('/api/profile', authenticateToken, (req, res) => {
 
 app.get('/api/requests', authenticateToken, (req, res) => {
     const user = req.user;
-    const requests = requests.filter(r => r.email == user.email);
+    const myRequests = requests.filter(r => r.email == user.email);
 
-    res.json({requests})
+    res.json({myRequests})
 })
 
 app.get('/api/admin/departments', authenticateToken, authorizeRole('admin'), (req, res) => {
@@ -151,9 +153,9 @@ app.get('/api/admin/employees', authenticateToken, authorizeRole('admin'), (req,
     res.json({employees})
 })
 
-app.get('/api/admin/accounts', authenticateToken, authorizeRole('admin', (rew, res) => {
+app.get('/api/admin/accounts', authenticateToken, authorizeRole('admin'), (req, res) => {
     res.json({users})
-}))
+})
 
 //Admin-only route
 app.get('/api/admin/dashboard', authenticateToken, authorizeRole('admin'), (req, res) => {
