@@ -283,7 +283,6 @@ function checkEmpty(inputs){
 
 
 async function setAuthState(isAuth, user){
-    currentUser = user.user;
     if(isAuth){
         body.classList.remove('not-authenticated');
         body.classList.add('authenticated');
@@ -431,7 +430,7 @@ async function handleLogin(data){
 }
 
 function handleLogout(){
-    localStorage.removeItem("auth_token")
+    sessionStorage.clear();
     setAuthState(false)
     navigateTo('#/');
 }
