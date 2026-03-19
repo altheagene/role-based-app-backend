@@ -114,7 +114,7 @@ app.post('/api/verifyemail', (req, res) => {
 app.post('/api/login', async(req, res) => {
     const {email, password} = req.body;
     console.log(email + ' ' + password)
-    const user = users.find(u => u.email == email);
+    const user = users.find(u => u.email == email && u.verified);
 
     if(!user || !await bcrypt.compare(password, user.password)){
         return res.status(401).json({error: 'Invalid credentials'});
@@ -228,6 +228,17 @@ app.put('/api/admin/saveaccountedits', authenticateToken, authorizeRole('admin')
         
         res.json({message: 'Successfully saved edits!'})
     }
+})
+
+app.put('/api/admin/resetpassword', authenticateToken, authorizeRole('admin'), async (req, res) => {
+    const {email, password} = req.body;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = users.find(u => u.email == email);
+    user.password = hashedPassword;
+
+    res.json({message: 'Password successfully reset!'})
 })
 
 

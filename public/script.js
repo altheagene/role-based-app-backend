@@ -574,7 +574,7 @@ async function saveAccount(){
                     editingEmail: editingEmail
                 })
             })
-            console.log('SUCCESSFULLY SAVED EDITS')
+            showToast("Successfully saved changes!", true);
         }catch(err){
             console.log(err)
         }
@@ -597,18 +597,15 @@ async function saveAccount(){
                     verified: data.verified
                 })
             }
-        )      
+        ) 
+        
+        showToast("Successfully added new account!", true);
     }
 
-    //close the modal and show toast after successfully saving account/edits
+    //close the modal and re-render accounts
     if(status){     
         document.getElementById('accounts-cancel-btn').click();
         renderAccounts();
-        if(editing){
-            showToast("Successfully saved changes!", true);
-        }else{
-            showToast("Successfully added new account!", true);
-        }
     }
 
 
@@ -656,16 +653,30 @@ async function editAccount(email){
    
 }
 
-function resetPassword(email){
+async function resetPassword(email){
     const newPassword = prompt("Enter this account's new password. Password length must be minimum of six characters")
     const valid = passwordValidation(newPassword)
     if(!valid){
         alert('Invalid password. Password must be 6 characters long.');
         return;
     }else{
-        const index = window.db.accounts.findIndex(account => account.email == email)
-        window.db.accounts[index].password = newPassword;
-        saveToStorage();
+        const response = await fetch(`${server}/api/admin/resetpassword`,
+            {
+                method: 'PUT',
+                headers: {
+                    'Content-Type' : 'application/json',
+                    'Authorization' : `Bearer ${sessionStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    email: email,
+                    password: newPassword
+                })
+            }
+        )
+
+        if(response.ok){
+            showToast('Password successfully reset!', true)
+        }
     }
 }
 
