@@ -368,7 +368,7 @@ async function handleRegistration(data){
             headers: {
                 'Content-Type' : 'application/json'
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify({...data, verified: false})
         }
     ).then(res => res.json())
 
@@ -491,9 +491,12 @@ window.addEventListener("hashchange", handleRouting);
 
 // ===================== ACCOUNTS-JS =======================
 
-function saveAccount(){
+async function saveAccount(){
+
+    //if not editing, show password field
     if(!editing)
         document.getElementById('account-label-pass').classList.remove('hide-msg')
+
     const verifiedField = document.getElementById('verified-field');
     const inputs = accountsForm.querySelectorAll('input');
     const check = checkEmpty(inputs);
@@ -504,9 +507,15 @@ function saveAccount(){
         return;
     }
     
+    //data from the form
     const formData = new FormData(accountsForm)
     const data = Object.fromEntries(formData);
     data.email = data.email.trim().toLowerCase();
+    if(verifiedField.checked){
+        data.verified = true
+    }else{
+        data.verified = false;
+    }
 
     //validate email format
     const validEmail = emailValidation(data.email.trim());
@@ -514,9 +523,16 @@ function saveAccount(){
     status = validEmail
 
     //check if email exists already!
-    const account = window.db.accounts.some(acc => acc.email == data.email.trim())
+    const account = await fetch(`${server}/api/admin/getaccount?email=${encodeURIComponent(data.email)}`,
+        {
+            method: 'GET',
+            headers: getAuthHeader(),
+        }
+    )
 
-    if(account && !editing){
+    const accountData = await account.json();
+    
+    if(account.ok && accountData.exists && !editing){
         const element = document.getElementById('acc-email')
         element.textContent =  'Email already exists!';
         element.previousElementSibling.style.borderColor = 'red';
@@ -528,41 +544,64 @@ function saveAccount(){
         document.getElementById('account-pass-msg').textContent = 'Password must be 6 characters in length!'
         return;
     }
-
-    if(verifiedField.checked){
-        data.verified = true
-    }else{
-        data.verified = false;
-    }
-    
+ 
     document.getElementById('form-message-div').classList.add('hide-msg');
 
     if(editing && status){
-        //finds the index of the account being edited and updates the values;
-        const emailExists = window.db.accounts.some(account => account.email == editingEmail)
-
-        if(emailExists && data.email.trim() != editingEmail){
-            element.textContent =  'Email already exists!'; 
-            return;
+        
+        if(data.email.trim() != editingEmail){  
+            if(accountData.exists){
+                element.textContent =  'Email already exists!';
+                return;
+            }
         }else{
             element.innerText =  '';
         }
-        const index = window.db.accounts.findIndex(account => account.email == editingEmail);
-        window.db.accounts[index].firstName = data.firstName.trim();
-        window.db.accounts[index].lastName = data.lastName.trim();
-        window.db.accounts[index].email = data.email.trim();
-        window.db.accounts[index].password = data.password;
-        window.db.accounts[index].role = data.role;
-        window.db.accounts[index].verified = data.verified;
+
+        try{
+            const response = await fetch(`${server}/api/admin/saveaccountedits`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type' : 'application/json',
+                    'Authorization' : `Bearer ${sessionStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    firstName: data.firstName.trim(),
+                    lastName: data.lastName.trim(),
+                    email: data.email.trim(),
+                    role: data.role,
+                    verified: data.verified,
+                    editingEmail: editingEmail
+                })
+            })
+            console.log('SUCCESSFULLY SAVED EDITS')
+        }catch(err){
+            console.log(err)
+        }
+        
     }else if(!editing && status){
-        const acc = window.db.accounts[window.db.accounts.length - 1];
-        data.userId = acc.userId + 1;
-        window.db.accounts.push(data);
-       
+        //POST INFO TO BACKEND
+        const response = await fetch(`${server}/api/admin/addaccount`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type' : 'application/json',
+                    'Authorization' : `Bearer ${sessionStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    firstName: data.firstName.trim(),
+                    lastName: data.lastName.trim(),
+                    email: data.email.trim(),
+                    password: data.password,
+                    role: data.role,
+                    verified: data.verified
+                })
+            }
+        )      
     }
 
-    if(status){
-        saveToStorage();
+    //close the modal and show toast after successfully saving account/edits
+    if(status){     
         document.getElementById('accounts-cancel-btn').click();
         renderAccounts();
         if(editing){
@@ -590,20 +629,31 @@ function emailValidation(email){
     return emailRegEx.test(email);
 }
 
-function editAccount(email){
+async function editAccount(email){
     document.getElementById('account-label-pass').classList.add('hide-msg')
     editing = true;
     editingEmail = email;
 
-    const user = window.db.accounts.find(account => account.email == email);
-    accountsForm.elements['firstName'].value = user.firstName;
-    accountsForm.elements['lastName'].value = user.lastName;
-    accountsForm.elements['email'].value = user.email;
-    accountsForm.elements['password'].value = user.password;
-    accountsForm.elements['role'].value = user.role;
-    accountsForm.elements['verified-field'].checked = user.verified;
-    // document.getElementById('accounts-modal-btn').click();
-    myAccModal.show();
+    const response = await fetch(`${server}/api/admin/getaccount?email=${encodeURIComponent(editingEmail)}`, {
+        method: 'GET',
+        headers: getAuthHeader()
+    })
+
+    const data = await response.json()
+    console.log(data)
+    if(response.ok){
+        const user = data.user
+        accountsForm.elements['firstName'].value = user.firstName;
+        accountsForm.elements['lastName'].value = user.lastName;
+        accountsForm.elements['email'].value = user.email;
+        accountsForm.elements['password'].value = user.password;
+        accountsForm.elements['role'].value = user.role;
+        accountsForm.elements['verified-field'].checked = user.verified;
+        // document.getElementById('accounts-modal-btn').click();
+        myAccModal.show();
+    }
+
+   
 }
 
 function resetPassword(email){
@@ -667,8 +717,9 @@ async function renderAccounts(){
 
             tbody.innerHTML += element;
 
-            return true;
         }
+
+        return true;
 
     }else{
         console.log('ERROR. Unauthorized access!')

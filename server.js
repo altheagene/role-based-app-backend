@@ -16,6 +16,7 @@ app.use(cors({
 //parse JSON
 app.use(express.json());
 
+app.use(express.static('public'));
 
 //log incoming requests
 app.use((req, res, next) => {
@@ -35,8 +36,8 @@ app.listen(PORT, () => {
 });
 
 let users = [
-    {id: 1, firstName: 'Billie', lastName: 'Dove', email: 'admin@example.com', password: '$2a$10$.w1V1HnyIEAL.RuAbrZXNOsofSlcBxvxgNszEgXxhzxhLyWTF3DPa', role: 'admin'},
-    {id: 2, firstName: 'Althea', lastName: 'Genegobis', email: 'altheagenegobis2022@gmail.com', password: '$2a$10$.N52yJYLpjB.XOzcziYBbetUQIjrJzQ4tPhdqu2sbOZquL9i2PIiS', role: 'user'}
+    {id: 1, firstName: 'Billie', lastName: 'Dove', email: 'admin@example.com', password: '$2a$10$.w1V1HnyIEAL.RuAbrZXNOsofSlcBxvxgNszEgXxhzxhLyWTF3DPa', role: 'admin', verified: true},
+    {id: 2, firstName: 'Althea', lastName: 'Genegobis', email: 'altheagenegobis2022@gmail.com', password: '$2a$10$.N52yJYLpjB.XOzcziYBbetUQIjrJzQ4tPhdqu2sbOZquL9i2PIiS', role: 'user', verified: true}
 ];
 
 let departments = [
@@ -166,6 +167,70 @@ app.get('/api/admin/dashboard', authenticateToken, authorizeRole('admin'), (req,
 app.get('/api/content/guest', (req, res) => {
     res.json({message: 'Public content for all visitors.'});
 });
+
+app.get('/api/admin/getaccount', authenticateToken, authorizeRole('admin'), (req, res) => {
+    const {email} = req.query;
+
+    const user = users.find(u => u.email == email);
+    if(user){
+        res.json({
+                exists: true, 
+                message: 'This email already exists', 
+                user: {
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    email: user.email,
+                    role: user.role,
+                    verified: user.verified
+                }})
+    }else{
+        res.json({exists: false, message: 'This email is available'})
+    }
+})
+
+
+
+// ============================ POST REQUESTS ===================================
+
+app.post('/api/admin/addaccount', authenticateToken, authorizeRole('admin'), async(req, res) => {
+    const {firstName, lastName, email, password, role, verified} = req.body;
+
+    //hash password
+    const hashedPassword = await bcrypt.hash(password, 10)
+    const newUser = {
+        firstName, 
+        lastName, 
+        email,
+        password: hashedPassword,
+        role,
+        verified
+    }
+
+    users.push(newUser);
+    res.status(201).json({message: 'New account created!'});
+
+})
+
+
+// ============================== PUT REQUESTS =====================================
+app.put('/api/admin/saveaccountedits', authenticateToken, authorizeRole('admin'), async (req, res) => {
+    const {firstName, lastName, email, role, verified, editingEmail} = req.body;
+
+
+    const user = users.findIndex(u => u.email == editingEmail);
+
+    if(user){
+        users[user].firstName = firstName;
+        users[user].lastName = lastName
+        users[user].email = email;
+        users[user].role = role,
+        users[user].verified = verified
+        
+        res.json({message: 'Successfully saved edits!'})
+    }
+})
+
+
 
 function authenticateToken(req, res, next){
     const authHeader = req.headers['authorization'];
