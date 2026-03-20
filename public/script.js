@@ -372,7 +372,7 @@ async function handleRegistration(data){
     ).then(res => res.json())
 
     console.log(response);
-    unverifiedEmail = response.email;
+    unverifiedEmail = data.email;
     navigateTo('#/verify-email');
 }
 
@@ -630,6 +630,8 @@ async function editAccount(email){
     editing = true;
     editingEmail = email;
 
+    console.log('EDIT!')
+
     const response = await fetch(`${server}/api/admin/getaccount?email=${encodeURIComponent(editingEmail)}`, {
         method: 'GET',
         headers: getAuthHeader()
@@ -710,7 +712,7 @@ async function renderAccounts(){
     const data = await response.json()
     console.log(data)
     if(response.ok){
-        for (let account of data.users){
+        for (let account of data.accounts){
             const element = `
                 <tr>
                     <td>${account.firstName} ${account.lastName}</td>

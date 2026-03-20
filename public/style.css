@@ -208,8 +208,8 @@ option{
 /* =============== MODAL =============== */
 
 #toast-el{
-    top: 1rem;
-    right: 1rem;
+    top: 60px;
+    right: 2rem;
 }
 
 /* ================== FORM =========== */
