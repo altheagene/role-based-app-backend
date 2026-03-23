@@ -62,7 +62,7 @@ accountsModalBtn.addEventListener("click", () => {
 
 employeesModalBtn.addEventListener("click", () => {
     resetInputs(employeesForm);
-    employeeEmailField.classList.remove('hide-msg');
+    employeeEmailLabel.classList.remove('hide-msg');
 
 })
 
@@ -77,7 +77,7 @@ const verificationBtn = document.getElementById('verification-btn');
 const getStartedBtn = document.getElementById('get-started-btn');
 const cancelRegisterBtn = document.getElementById('cancel-register-btn');
 const cancelLoginBtn = document.getElementById('login-cancel-btn');
-const employeeEmailField = document.getElementById('employee-email')
+const employeeEmailLabel = document.getElementById('employee-email-label')
 
 
 //DYNAMIC STYLING
@@ -148,9 +148,6 @@ toggleAccount.addEventListener("click", () => {
     accountPassword.type = accountPassword.type === "password" ? "text" : "password";
 });
 
-
-
-let currentUser = null;
 window.location.hash = '#/'
 
 let editing = false;
@@ -294,7 +291,7 @@ function checkEmpty(inputs){
 
 
 
-async function setAuthState(isAuth, user){
+async function setAuthState(isAuth){
     if(isAuth){
         body.classList.remove('not-authenticated');
         body.classList.add('authenticated');
@@ -423,11 +420,12 @@ async function handleLogin(data){
             }
         )
 
-        const user = await res.json();
+        const resData = await res.json();
 
         if(res.ok){
-            sessionStorage.setItem('authToken', user.token);
-            setAuthState(true, user)
+            sessionStorage.setItem('authToken', resData.token);
+            sessionStorage.setItem('email', resData.user.email)
+            setAuthState(true)
             showToast('Logged in successfully!', true)
         }else{
             showToast('Invalid credentials!',false)
@@ -435,7 +433,7 @@ async function handleLogin(data){
 
         document.getElementById('email-verified-msg').classList.add('hide-msg')
     }catch(err){
-        console.err(err)
+        console.error(err)
     }
 
     
@@ -699,19 +697,37 @@ async function resetPassword(email){
     }
 }
 
-function deleteAccount(email){
-    if (email === currentUser.email){
+
+async function deleteAccount(email){
+    const currentEmail = sessionStorage.getItem('email')
+    if (email === currentEmail){
         alert('You cannot delete your own account!')
         return;
     }else{
         
-        if(confirm(`Are you sure you want to delete this acccount? Deleting so will also delete the employee associated with this account.`)){
-            const accounts = window.db.accounts.filter(account => account.email != email);
-            const employees = window.db.employees.filter(emp => emp.email != email)
-            window.db.accounts = accounts;
-            window.db.employees = employees
-            saveToStorage();
-            renderAccounts();
+        if(confirm(`Are you sure you want to delete this acccount?`)){
+            try {
+                // Call backend to check token and prevent self-deletion
+                const response = await fetch(`${server}/api/admin/deleteaccount/${encodeURIComponent(email)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if(response.ok){
+                    showToast('Account deleted successfully!', true);
+                    renderAccounts();
+                } else {
+                    showToast(data.message || 'Error deleting account', false);
+                }
+
+            } catch (error) {
+                console.error(error);
+                showToast('Server error!', false);
+            }
         }
     }
 }
@@ -760,93 +776,72 @@ async function renderAccounts(){
 
 // ==================== EMPLOYEES-JS =======================
 
-async function saveEmployee(){
-    console.log('HELLO')
-    employeesForm.elements['id'].value = 0;
+
+// Save edits for an existing employee
+async function saveEmployee() {
+    employeesForm.elements['id'].value = 0; // Reset hidden ID field
     const check = checkEmpty(employeesForm);
 
-    if(!check){
-        return;
-    }
+    if (!check) return;
 
     const formData = new FormData(employeesForm);
     const data = Object.fromEntries(formData);
-    console.log(data)
-    const element = document.getElementById('employee-email')
 
-    try{
-        if(editing){
-            saveEditEmployee(data);
-            return;
-        }
-        console.log('HELLO')
-        const response = await fetch(`${server}/api/admin/addemployee`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type' : 'application/json',
-                    'Authorization' : `Bearer ${sessionStorage.getItem('authToken')}`
-                },
-                body: JSON.stringify({
-                    employeeId: data.employeeId, 
-                    email: data.email, 
-                    position: data.position, 
-                    deptId: parseInt(data.deptId), 
-                    hireDate: data.hireDate})
-            }
-        )
+    const emailElement = document.getElementById('employee-email'); // Display messages here
+    const idElement = document.getElementById('employee-id');
 
-        const resData = await response.json();
-        console.log(resData.accountExists);
-        console.log(resData.employeeExists)
-        if(!resData.accountExists){
-            element.textContent = 'This email does not have an account!';
-            return;
-        }else if(resData.employeeExists){
-            element.textContent = 'This email is already associated with an existing employee!';
+    try {
+        if (editing) {
+            await saveEditEmployee(data);
             return;
         }
 
-
-        if(data.ok){
-            document.getElementById('employee-cancel-btn').click();
-            showToast("Successfully added new employee!", true);
-        }
-
-    }catch(err){
-
-    }
-}
-
-async function saveEditEmployee(data){
-    const response = await fetch(`${server}/api/admin/saveemployeedits`,
-        {
+        // Call backend to add employee
+        const response = await fetch(`${server}/api/admin/addemployee`, {
             method: 'POST',
             headers: {
-                'Content-Type' : 'application/json',
-                'Authorization' : `Bearer ${sessionStorage.getItem('authToken')}`
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
             },
             body: JSON.stringify({
-                id: data.id,
-                employeeId: data.employeeId, 
-                position: data.position, 
-                deptId: parseInt(data.deptId), 
-                hireDate: data.hireDate})
+                employeeId: data.employeeId,
+                email: data.email,
+                position: data.position,
+                deptId: parseInt(data.deptId),
+                hireDate: data.hireDate
+            })
+        });
+
+        const resData = await response.json();
+
+        // Handle backend validation messages
+        if (!resData.accountExists) {
+            emailElement.textContent = 'This email does not have an account!';
+            return;
+        } else if (resData.employeeExists && resData.message.includes('Employee ID')) {
+            idElement.textContent = 'This employee ID already exists!';
+            return;
+        } else if (resData.employeeExists && resData.message.includes('email')) {
+            emailElement.textContent = 'This email is already associated with an existing employee!';
+            return;
         }
-    )
 
-    const resData = await response.json();
+        // Success
+        if (response.ok) {
+            document.getElementById('employee-cancel-btn').click();
+            showToast('Successfully added new employee!', true);
+            renderEmployees();
+        }
 
-    if(resData.ok){
-        document.getElementById('employee-cancel-btn').click();
-        showToast("Successfully added new employee!", true);
-        editing = false;  
+    } catch (err) {
+        console.error(err);
+        showToast('Server error!', false);
     }
 }
 
 async function editEmployee(id){
     editing = true;
-    employeeEmailField.classList.add('hide-msg');
+    employeeEmailLabel.classList.add('hide-msg');
     try{
         const response = await fetch(`${server}/api/admin/getemployee?id=${encodeURIComponent(id)}`,
             {
@@ -876,30 +871,33 @@ async function editEmployee(id){
 
 
 async function deleteEmployee(id){
-    console.log(id)
-    if(confirm('Are you sure you want to delete this employee?')){
-       const response = await fetch(`${server}/api/admin/deleteemployee`,
-        {
+    if(!confirm('Are you sure you want to delete this employee?')) return;
+
+    try {
+        // Send DELETE request using URL param
+        const response = await fetch(`${server}/api/admin/deleteemployee/${id}`, {
             method: 'DELETE',
             headers: {
-                'Content-Type' : 'application/json',
-                'Authorization' : `Bearer ${sessionStorage.getItem('authToken')}`
-            },
-            body: JSON.stringify({id: parseInt(id)})
+                'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+            }
+        });
+
+        // Always parse JSON, backend must respond in all cases
+        const data = await response.json();
+
+        if(response.ok){
+            showToast(data.message, true);
+            renderEmployees(); // refresh only after successful deletion
+        } else {
+            // Show backend message (e.g., employee has requests, not found, etc.)
+            showToast(data.message || 'Error deleting employee!', false);
         }
-       )
 
-       const data = await response.json();
-
-       if(response.ok){
-         showToast('Employee successfully deleted!')
-       }else{
-        showToast('Error in deleting student!', false)
-       }
+    } catch(error) {
+        console.error(error);
+        showToast('Server error!', false);
     }
-
-    renderEmployees();
-}
+}s
 
 async function renderEmployees(){
     const tbody = document.getElementById('employees-tbody');

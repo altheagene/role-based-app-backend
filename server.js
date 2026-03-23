@@ -17,8 +17,6 @@ app.use(cors({
 //parse JSON
 app.use(express.json());
 
-app.use(express.static('public'));
-
 //log incoming requests
 app.use((req, res, next) => {
     console.log(`${req.method} ${req.url}`);
@@ -35,28 +33,6 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`);
 });
-
-let departments = [
-    {
-        deptId: 1,
-        name: 'Engineering',
-        description: 'Department of Engineering'
-    },
-    {
-        deptId: 2,
-        name: 'Human Resources',
-        description: 'Department of Human Resources'
-    }
-]
-
-let employees = []
-
-let requests = [
-    {
-        //input dummy data
-    }
-]
-
 
 
 app.post('/api/register', async (req, res) => {
@@ -324,53 +300,86 @@ app.post('/api/admin/addaccount', authenticateToken, authorizeRole('admin'), asy
 
         res.status(201).json({ message: 'Successfully updated account!' });
     }catch(err){
-
+        console.error(err); 
+        res.status(500).json({ message: 'Server error. Could not create account.' });
     }
 
 })
 
 
 app.post('/api/admin/addemployee', authenticateToken, authorizeRole('admin'), async (req, res) => {
-    const {employeeId, email, position, deptId, hireDate} = req.body;
-    console.log(employeeId)
-    console.log(email)
+    const { employeeId, email, position, deptId, hireDate } = req.body;
 
-    //check if email exists in user
-
-    try{
-        const [rows] = await db.query(
+    try {
+        //Check if account exists
+        const [accountRows] = await db.query(
             'SELECT * FROM accounts WHERE email = ?',
             [email]
-        )
+        );
 
-        if(rows.length == 0){
-            return res.status(200).json({message: 'There is no account associated with this email', accountExists : false, employeeExists: false});
+        if (accountRows.length === 0) {
+            return res.status(200).json({
+                message: 'There is no account associated with this email',
+                accountExists: false,
+                employeeExists: false
+            });
         }
 
-        const [rows2] = await db.query(
+        const accountId = accountRows[0].id;
+
+        //Check if employeeId already exists
+        const [employeeIdRows] = await db.query(
+            'SELECT * FROM employees WHERE employeeID = ?',
+            [employeeId]
+        );
+
+        if (employeeIdRows.length > 0) {
+            return res.status(200).json({
+                message: 'Employee ID already exists',
+                employeeExists: true,
+                accountExists: true
+            });
+        }
+
+        //Check if this account already has an employee
+        const [employeeRows] = await db.query(
             'SELECT * FROM employees WHERE accountId = ?',
-            [rows[0].id]
-        )
+            [accountId]
+        );
 
-        if(rows2.length > 0){
-            return res.status(200).json({message: 'There is already an employee with this email', employeeExists : true, accountExists: true});
+        if (employeeRows.length > 0) {
+            return res.status(200).json({
+                message: 'There is already an employee with this email',
+                employeeExists: true,
+                accountExists: true
+            });
         }
 
+        // Insert new employee
         const [result] = await db.query(
-            'INSERT INTO employees (employeeID, accountId, position, departmentId, hireDate) values(?, ?, ?, ?, ?)',
-            [employeeId, rows[0].id, position, deptId, hireDate]
-        )
+            'INSERT INTO employees (employeeID, accountId, position, departmentId, hireDate) VALUES (?, ?, ?, ?, ?)',
+            [employeeId, accountId, position, deptId, hireDate]
+        );
 
-        if(result.affectedRows == 0){
-            return res.status(404).json({message: 'Error saving account!', employeeExists: false, accountExists: false})
+        if (result.affectedRows === 0) {
+            return res.status(500).json({
+                message: 'Error saving employee!',
+                employeeExists: false,
+                accountExists: true
+            });
         }
-            
-        res.status(201).json({message: 'New employee successfully added!',  employeeExists: false, accountExists: true})
-    }catch(err){
-        console.error(err)
+
+        res.status(201).json({
+            message: 'New employee successfully added!',
+            employeeExists: false,
+            accountExists: true
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error' });
     }
-    
-})
+});
 
 app.post('/api/addrequest', authenticateToken, async (req, res) => {
     try {
@@ -440,20 +449,39 @@ app.put('/api/admin/saveaccountedits', authenticateToken, authorizeRole('admin')
 
         return res.status(201).json({message: 'Successfully updated account!'})
     }catch(err){
-
+        'console.error(err); 
+        res.status(500).json({ message: 'Server error. Could not create account.' });
     }
 })
 
 app.put('/api/admin/resetpassword', authenticateToken, authorizeRole('admin'), async (req, res) => {
-    const {email, password} = req.body;
+    try {
+        const {email, password } = req.body;
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+        if (!email || !password) {
+            return res.status(400).json({ message: 'Email and new password are required' });
+        }
 
-    const user = users.find(u => u.email == email);
-    user.password = hashedPassword;
+        // Hash the new password
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-    res.json({message: 'Password successfully reset!'})
-})
+        // Update password in database
+        const [result] = await db.query(
+            'UPDATE accounts SET password = ? WHERE email = ?',
+            [hashedPassword, email]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json({ message: 'Password successfully reset!' });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
 
 app.put('/api/admin/saveemployeedits', authenticateToken, authorizeRole('admin'), async (req, res) => {
     const {id, employeeId, position, deptId, hireDate} = req.body
@@ -473,24 +501,85 @@ app.put('/api/admin/saveemployeedits', authenticateToken, authorizeRole('admin')
 
 // ============================= DELETE REQUESTS ================================
 
-app.delete('/api/admin/deleteemployee', authenticateToken, authorizeRole('admin'), async (req, res) => {
-    const {id} = req.body;
+app.delete('/api/admin/deleteemployee/:id', authenticateToken, authorizeRole('admin'), async (req, res) => {
+    const id = parseInt(req.params.id);
 
-    try{
-        const [result] = await db.query(
-            'DELETE FROM employees WHERE id = ?',
-            [id]
-        );
+    if (!id) return res.status(400).json({ message: 'Invalid employee ID' });
 
-        if(result.affectedRows > 0){
-            res.status(201).json({message: 'Employee successfully deleted.'})
+    try {
+        // Check for existing requests
+        const [requests] = await db.query('SELECT COUNT(*) AS count FROM requests WHERE employeeId = ?', [id]);
+
+        if(requests[0].count > 0){
+            return res.status(400).json({ message: 'Cannot delete employee with existing requests.' });
         }
 
-    }catch(err){
-        console.error(err)
+        // Safe to delete
+        const [result] = await db.query('DELETE FROM employees WHERE id = ?', [id]);
+
+        if(result.affectedRows > 0){
+            return res.json({ message: 'Employee successfully deleted.' });
+        } else {
+            return res.status(404).json({ message: 'Employee not found.' });
+        }
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'Server error.' });
     }
-    
-})
+});
+
+app.delete('/api/admin/deleteaccount/:email', authenticateToken, authorizeRole('admin'), async (req, res) => {
+    try {
+        const emailToDelete = req.params.email;
+        const loggedInEmail = req.user.email;
+
+        // Prevent self-deletion
+        if(emailToDelete === loggedInEmail){
+            return res.status(400).json({ message: 'You cannot delete your own account!' });
+        }
+
+        // Get employee linked to this account
+        const [employeeRows] = await db.query(
+            'SELECT e.id AS employeeId FROM employees e JOIN accounts a ON e.accountId = a.id WHERE a.email = ?',
+            [emailToDelete]
+        );
+
+        if(employeeRows.length > 0){
+            const employeeId = employeeRows[0].employeeId;
+
+            // Check if employee has existing requests
+            const [requests] = await db.query(
+                'SELECT COUNT(*) AS count FROM requests WHERE employeeId = ?',
+                [employeeId]
+            );
+
+            if(requests[0].count > 0){
+                return res.status(400).json({ message: 'Cannot delete account: employee has existing requests.' });
+            }
+
+            // Safe to delete employee
+            await db.query('DELETE FROM employees WHERE id = ?', [employeeId]);
+        }
+
+        // Delete account
+        const [result] = await db.query(
+            'DELETE FROM accounts WHERE email = ?',
+            [emailToDelete]
+        );
+
+        if(result.affectedRows === 0){
+            return res.status(404).json({ message: 'Account not found' });
+        }
+
+        res.json({ message: 'Account deleted successfully!' });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 function authenticateToken(req, res, next){
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -514,12 +603,4 @@ function authorizeRole(role){
 
         next();
     }
-}
-
-function getUserIdFromToken(req) {
-    const authHeader = req.headers.authorization;
-    const token = authHeader.split(" ")[1];
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    return decoded.id;
 }
