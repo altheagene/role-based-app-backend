@@ -28,6 +28,7 @@
                     <li onclick="navigateTo('#/accounts')"class="role-admin"><a class="dropdown-item">Accounts</a></li>
                     <li onclick="navigateTo('#/departments')"class="role-admin"><a class="dropdown-item">Departments</a></li>
                     <li onclick="navigateTo('#/requests')"><a class="dropdown-item">My Requests</a></li>
+                    <li onclick="navigateTo('#/allrequests')" class="role-admin"><a class="dropdown-item">All Requests</a></li>
                     <li onclick="handleLogout()"><a class="dropdown-item text-danger">Logout</a></li>
                 </ul>
         </div>
@@ -60,6 +61,44 @@
                 <button class="btn-primary" id="get-started-btn">Get Started <i class="bi bi-arrow-right"></i></button>
             </div>
             
+        </section>
+
+        <section id="allrequests-page" class="page">
+            <div class="page-header">
+                <h2>All Requests</h2>
+
+                <div class="d-flex gap-2">
+                    <select id="filter-status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Rejected">Rejected</option>
+                        <option value="Cancelled">Cancelled</option>
+                    </select>
+
+                    <select id="filter-department" class="form-select">
+                        <option value="">All Departments</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <th>Request ID</th>
+                        <th>Employee</th>
+                        <th>Department</th>
+                        <th>Type</th>
+                        <th>Items</th>
+                        <th>Date Filed</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </thead>
+                    <tbody id="allrequests-tbody">
+
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <section id="register-page" class="page role-logged-out">

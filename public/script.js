@@ -11,6 +11,7 @@ const employeesPage = document.getElementById('employees-page');
 const departmentsPage = document.getElementById('departments-page')
 const accountsPage = document.getElementById('accounts-page');
 const requestsPage = document.getElementById('requests-page');
+const allRequestsPage = document.getElementById('allrequests-page');
 const body = document.querySelector('body');
 
 let currentPage = homePage;
@@ -237,6 +238,13 @@ async function handleRouting(){
                         success = await renderRequests();
                         if(success){
                             currentPage = requestsPage;
+                        }
+
+                        break;
+        case '#/allrequests': 
+                        success = await renderAllRequests();
+                        if(success){
+                            currentPage = allRequestsPage;
                         }
 
                         break;
@@ -977,48 +985,47 @@ async function renderDeptDropdown(){
 
 async function renderRequests(){
     const tbody = document.getElementById('requests-tbody');
-    tbody.innerHTML = ''
+    tbody.innerHTML = '';
 
-    const response = await fetch(`${server}/api/requests`,
-        {
-            method: 'GET',
-            headers: getAuthHeader()
-        }
-    )
+    const response = await fetch(`${server}/api/requests`, {
+        method: 'GET',
+        headers: getAuthHeader()
+    });
 
     const data = await response.json();
 
     if(response.ok){
         if(data.myRequests.length > 0){
-            document.getElementById('no-requests-div').classList.add('hide-msg')
-            document.getElementById('requests-table').classList.remove('hide-msg')
-            for (let request of myRequests){
+            document.getElementById('no-requests-div').classList.add('hide-msg');
+            document.getElementById('requests-table').classList.remove('hide-msg');
+
+            for (let request of data.myRequests){
+                const statusClass = 
+                    request.status == 'Pending' ? 'bg-warning' :
+                    request.status == 'Approved' ? 'bg-success' :
+                    request.status == 'Rejected' ? 'bg-danger' :
+                    'bg-secondary';
+
                 const element = `
                     <tr>
                         <td>${request.requestId}</td>
                         <td>${request.type}</td>
-                        <td>${request.date}</td>
-                        <td><span class="badge ${request.status == 'Pending' ? "bg-warning" : 
-                            request.status == 'Approved' ? 'bg-success' : 'bg-danger'
-                        }">${request.status} </span></td>
-
+                        <td>${request.dateFiled}</td>
+                        <td><span class="badge ${statusClass}">${request.status}</span></td>
                     </tr>
-                `
+                `;
                 tbody.innerHTML += element;
             }     
         }else{
-            document.getElementById('no-requests-div').classList.remove('hide-msg')
-            document.getElementById('requests-table').classList.add('hide-msg')
+            document.getElementById('no-requests-div').classList.remove('hide-msg');
+            document.getElementById('requests-table').classList.add('hide-msg');
         }
 
         return true;
     }else{
-        console.log('ERROR!')
+        console.log('ERROR!');
         return false;
     }
-
-    
-    
 }
 
 
@@ -1075,54 +1082,80 @@ function renderItems(){
     }
 }
 
+function renderAllRequests(){
+    const tbody = document.getElementById("allrequests-tbody");
+    tbody.innerHTML = "";
+
+    return true;
+   
+   
+}
+
 function deleteItem(id){
     //remove item element at place of id. if id is 2, remove element at index 2-1 = 1
     itemRequests.splice(id-1, 1)
     document.getElementById(`${id}`).remove();
 }
 
-function saveItems(){
-    //check if items have empty values
+async function saveItems(){
     const itemDivs = document.querySelectorAll('.item-div');
-    const msgDdiv = document.getElementById('requests-msg-div'); //error messages will be displayed here
+    const msgDdiv = document.getElementById('requests-msg-div');
 
+    let itemRequests = [];
+
+    // Validate inputs
     for(let i = 0; i < itemDivs.length; i++){
         const item = itemDivs[i].querySelector('.itemName').value;
         const qty = itemDivs[i].querySelector('.itemQty').value;
 
         if(item == '' || qty == ''){
-           msgDdiv.classList.remove('hide-msg')
-           msgDdiv.innerText = 'Please fill out all fields!'
+            msgDdiv.classList.remove('hide-msg');
+            msgDdiv.innerText = 'Please fill out all fields!';
             return;
         }
 
-        itemRequests[i] = {
-            name: item,
-            qty: qty
-        }
+        itemRequests.push({
+            itemName: item,
+            quantity: qty
+        });
     }
 
-    msgDdiv.classList.add('hide-msg')
-    
+    msgDdiv.classList.add('hide-msg');
 
-    window.db.requests.push(
-        {
-            requestId: window.db.requests.length + 1,
-            type: document.getElementById('equipment-type').value,
-            items: itemRequests,
-            status: 'Pending',
-            date: new Date().toISOString().split('T')[0],
-            employeeEmail: currentUser.email
+    // Prepare data to send to server
+    const requestData = {
+        type: document.getElementById('equipment-type').value,
+        dateFiled: new Date().toISOString().split('T')[0],
+        items: itemRequests
+    };
 
+    try {
+        const response = await fetch(`${server}/api/addrequest`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        const data = await response.json();
+
+        if(response.ok){
+            alert('Request submitted successfully!');
+            document.getElementById('request-close-btn').click();
+            renderRequests();
+            resetInputs(requestsPage);
+        } else {
+            msgDdiv.classList.remove('hide-msg');
+            msgDdiv.innerText = data.message;
         }
-    )
 
-    saveToStorage();
-    document.getElementById('request-close-btn').click();
-    renderRequests();
-    const inputs = requestsPage.querySelectorAll('input')
-    resetInputs(requestsPage);
-    itemRequests = []
+    } catch (error) {
+        console.error(error);
+        msgDdiv.classList.remove('hide-msg');
+        msgDdiv.innerText = 'Server error!';
+    }
 }
 
 // ================ DEPARTMENTS-JS ===========================

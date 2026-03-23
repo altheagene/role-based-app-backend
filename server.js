@@ -163,12 +163,44 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     res.json({user: rows[0]})
 });
 
-app.get('/api/requests', authenticateToken, (req, res) => {
-    const user = req.user;
-    const myRequests = requests.filter(r => r.email == user.email);
+app.get('/api/requests', authenticateToken, async (req, res) => {
+    try {
+        const accountId = req.user.id;
 
-    res.json({myRequests})
-})
+        // Get employeeId
+        const [employee] = await db.query(
+            'SELECT id FROM employees WHERE accountId = ?',
+            [accountId]
+        );
+
+        if(employee.length === 0){
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        const employeeId = employee[0].id;
+
+        // Get requests
+        const [requests] = await db.query(
+            `SELECT 
+                r.id AS requestId,
+                r.type,
+                r.status,
+                r.dateFiled
+             FROM requests r
+             WHERE r.employeeId = ?
+             ORDER BY r.dateFiled DESC`,
+            [employeeId]
+        );
+
+        res.json({
+            myRequests: requests
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
 
 app.get('/api/admin/departments', authenticateToken, authorizeRole('admin'), async (req, res) => {
 
@@ -340,9 +372,56 @@ app.post('/api/admin/addemployee', authenticateToken, authorizeRole('admin'), as
     
 })
 
-app.post('/api/admin/addrequest', authenticateToken, async (req, res) => {
-    
-})
+app.post('/api/addrequest', authenticateToken, async (req, res) => {
+    try {
+        const { type, items, dateFiled } = req.body;
+
+        // Get account ID from token
+        const accountId = req.user.id;
+
+        // Get employee ID from account
+        const [employee] = await db.query(
+            'SELECT id FROM employees WHERE accountId = ?',
+            [accountId]
+        );
+
+        if (employee.length === 0) {
+            return res.status(404).json({ message: "Employee not found" });
+        }
+
+        const employeeId = employee[0].id;
+
+        // Insert request
+        const [result] = await db.query(
+            'INSERT INTO requests (employeeId, type, dateFiled) VALUES (?, ?, ?)',
+            [employeeId, type, dateFiled]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(500).json({ message: "Failed to create request" });
+        }
+
+        const requestId = result.insertId;
+
+        // Insert request items
+        for (const item of items) {
+            await db.query(
+                'INSERT INTO request_items (requestId, itemName, quantity) VALUES (?, ?, ?)',
+                [requestId, item.itemName, item.quantity]
+            );
+        }
+
+        res.status(201).json({
+            message: "Request created successfully",
+            requestId: requestId
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
 
 
 // ============================== PUT REQUESTS =====================================
@@ -435,4 +514,12 @@ function authorizeRole(role){
 
         next();
     }
+}
+
+function getUserIdFromToken(req) {
+    const authHeader = req.headers.authorization;
+    const token = authHeader.split(" ")[1];
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    return decoded.id;
 }
