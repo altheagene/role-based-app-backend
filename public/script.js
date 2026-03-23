@@ -378,11 +378,20 @@ async function handleRegistration(data){
             },
             body: JSON.stringify({...data, verified: false})
         }
-    ).then(res => res.json())
+    )
+
+    const resData = await response.json();
+
+    if(!resData.ok){
+        emailErrMsg.innerText = 'There is already an account with this email'
+    }else{
+        emailErrMsg.innerText = '';
+        unverifiedEmail = data.email;
+        navigateTo('#/verify-email');
+    }
 
     console.log(response);
-    unverifiedEmail = data.email;
-    navigateTo('#/verify-email');
+    
 }
 
 async function handleVerification(){
@@ -396,7 +405,10 @@ async function handleVerification(){
         }
     ).then(res => res.json());
 
+ 
+    document.getElementById('email-verified-msg').classList.remove('hide-msg');
     navigateTo('#/login')
+    
 }
 
 async function handleLogin(data){
@@ -435,8 +447,7 @@ async function handleLogin(data){
     }catch(err){
         console.error(err)
     }
-
-    
+   
 }
 
 function handleLogout(){
@@ -701,7 +712,7 @@ async function resetPassword(email){
 async function deleteAccount(email){
     const currentEmail = sessionStorage.getItem('email')
     if (email === currentEmail){
-        alert('You cannot delete your own account!')
+        showToast('You cannot delete your own account!', false)
         return;
     }else{
         
@@ -897,7 +908,7 @@ async function deleteEmployee(id){
         console.error(error);
         showToast('Server error!', false);
     }
-}s
+}
 
 async function renderEmployees(){
     const tbody = document.getElementById('employees-tbody');
@@ -1003,12 +1014,13 @@ async function renderRequests(){
                     request.status == 'Approved' ? 'bg-success' :
                     request.status == 'Rejected' ? 'bg-danger' :
                     'bg-secondary';
+                const date =  new Date(request.dateFiled).toISOString().split('T')[0];
 
                 const element = `
                     <tr>
                         <td>${request.requestId}</td>
                         <td>${request.type}</td>
-                        <td>${request.dateFiled}</td>
+                        <td>${date}</td>
                         <td><span class="badge ${statusClass}">${request.status}</span></td>
                     </tr>
                 `;
@@ -1140,7 +1152,7 @@ async function saveItems(){
         const data = await response.json();
 
         if(response.ok){
-            alert('Request submitted successfully!');
+            showToast('Request submitted successfully!', true);
             document.getElementById('request-close-btn').click();
             renderRequests();
             resetInputs(requestsPage);

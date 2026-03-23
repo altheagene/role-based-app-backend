@@ -102,10 +102,10 @@ app.post('/api/login', async(req, res) => {
         if(rows.length > 0){
             const user = rows[0];
             
-            if(!user && !await bcrypt.compare(user.password, password)){
-                return res.status(401).json({message: 'Invalid credentials!'})
+             const validPassword = await bcrypt.compare(password, user.password);
+            if(!validPassword){
+                return res.status(401).json({message: 'Invalid credentials!'});
             }
-
             console.log('HELLO')
             //if user exists generate token
             const token = jwt.sign(
@@ -114,7 +114,7 @@ app.post('/api/login', async(req, res) => {
                 {expiresIn : '1h'}
             )
 
-            res.json({
+            res.status(200).json({
                 token, user: {email: user.email, role: user.role}
             })
         }
@@ -449,7 +449,7 @@ app.put('/api/admin/saveaccountedits', authenticateToken, authorizeRole('admin')
 
         return res.status(201).json({message: 'Successfully updated account!'})
     }catch(err){
-        'console.error(err); 
+        console.error(err); 
         res.status(500).json({ message: 'Server error. Could not create account.' });
     }
 })
@@ -579,6 +579,9 @@ app.delete('/api/admin/deleteaccount/:email', authenticateToken, authorizeRole('
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+
+//==============================================================================
 
 function authenticateToken(req, res, next){
     const authHeader = req.headers['authorization'];
