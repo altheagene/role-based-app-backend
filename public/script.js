@@ -60,7 +60,9 @@ accountsModalBtn.addEventListener("click", () => {
 })
 
 employeesModalBtn.addEventListener("click", () => {
-    resetInputs(employeesForm)
+    resetInputs(employeesForm);
+    employeeEmailField.classList.remove('hide-msg');
+
 })
 
 //MODAL SAVE MODAL BTNS
@@ -74,6 +76,7 @@ const verificationBtn = document.getElementById('verification-btn');
 const getStartedBtn = document.getElementById('get-started-btn');
 const cancelRegisterBtn = document.getElementById('cancel-register-btn');
 const cancelLoginBtn = document.getElementById('login-cancel-btn');
+const employeeEmailField = document.getElementById('employee-email')
 
 
 //DYNAMIC STYLING
@@ -240,6 +243,7 @@ async function handleRouting(){
                         
         case '#/employees' : 
                         success = await renderEmployees();
+                        console.log(success)
                         if(success){
                             renderDeptDropdown();
                             currentPage = employeesPage;
@@ -626,31 +630,37 @@ function emailValidation(email){
 }
 
 async function editAccount(email){
-    document.getElementById('account-label-pass').classList.add('hide-msg')
-    editing = true;
-    editingEmail = email;
+    try {
+        document.getElementById('account-label-pass').classList.add('hide-msg')
+        editing = true;
+        editingEmail = email;
 
-    console.log('EDIT!')
+        console.log('EDIT!')
 
-    const response = await fetch(`${server}/api/admin/getaccount?email=${encodeURIComponent(editingEmail)}`, {
-        method: 'GET',
-        headers: getAuthHeader()
-    })
+        const response = await fetch(`${server}/api/admin/getaccount?email=${encodeURIComponent(editingEmail)}`, {
+            method: 'GET',
+            headers: getAuthHeader()
+        })
 
-    const data = await response.json()
-    console.log(data)
-    if(response.ok){
-        const user = data.user
-        accountsForm.elements['firstName'].value = user.firstName;
-        accountsForm.elements['lastName'].value = user.lastName;
-        accountsForm.elements['email'].value = user.email;
-        accountsForm.elements['password'].value = user.password;
-        accountsForm.elements['role'].value = user.role;
-        accountsForm.elements['verified-field'].checked = user.verified;
-        // document.getElementById('accounts-modal-btn').click();
-        myAccModal.show();
+        console.log('Response:', response);
+
+        const data = await response.json()
+        console.log('DATA:', data)
+
+        if(response.ok){
+            const user = data.user
+            accountsForm.elements['firstName'].value = user.firstName;
+            accountsForm.elements['lastName'].value = user.lastName;
+            accountsForm.elements['email'].value = user.email;
+            accountsForm.elements['password'].value = user.password;
+            accountsForm.elements['role'].value = user.role;
+            accountsForm.elements['verified-field'].checked = user.verified;
+            myAccModal.show();
+        }
+
+    } catch(err) {
+        console.error('ERROR:', err)
     }
-
    
 }
 
@@ -742,7 +752,9 @@ async function renderAccounts(){
 
 // ==================== EMPLOYEES-JS =======================
 
-function saveEmployee(){
+async function saveEmployee(){
+    console.log('HELLO')
+    employeesForm.elements['id'].value = 0;
     const check = checkEmpty(employeesForm);
 
     if(!check){
@@ -751,71 +763,131 @@ function saveEmployee(){
 
     const formData = new FormData(employeesForm);
     const data = Object.fromEntries(formData);
+    console.log(data)
     const element = document.getElementById('employee-email')
 
+    try{
+        if(editing){
+            saveEditEmployee(data);
+            return;
+        }
+        console.log('HELLO')
+        const response = await fetch(`${server}/api/admin/addemployee`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type' : 'application/json',
+                    'Authorization' : `Bearer ${sessionStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({
+                    employeeId: data.employeeId, 
+                    email: data.email, 
+                    position: data.position, 
+                    deptId: parseInt(data.deptId), 
+                    hireDate: data.hireDate})
+            }
+        )
 
-    const employeeExists = window.db.employees.findIndex(employee => employee.email == data.email)
-    if(employeeExists != -1 && !editing ){
-        element.textContent = 'This email is already associated with an existing employee!';
-        return;
-    }
+        const resData = await response.json();
+        console.log(resData.accountExists);
+        console.log(resData.employeeExists)
+        if(!resData.accountExists){
+            element.textContent = 'This email does not have an account!';
+            return;
+        }else if(resData.employeeExists){
+            element.textContent = 'This email is already associated with an existing employee!';
+            return;
+        }
 
-    const index = window.db.accounts.findIndex(account => account.email == data.email.trim());
 
-    if(index == -1){
-        element.textContent = 'This email does not have an account!';
-        return;
-    }
-    
-    element.textContent = ''
-    const account = window.db.accounts.find(acc => acc.email == data.email )
-    data.userId = account.userId;  
-    data.deptId = parseInt(data.deptId) 
-    
-    
-    
-
-    if(!editing){
-        window.db.employees.push(data);
-    }else{
-        // const empIndex = window.db.employees.findIndex(emp => emp.userId == account.userId)
-        window.db.employees[employeeExists].deptId = data.deptId = parseInt(data.deptId)
-        window.db.employees[employeeExists].id = data.id
-        window.db.employees[employeeExists].hireDate = data.hireDate;
-        window.db.employees[employeeExists].email = data.email;
-        window.db.employees[employeeExists].position = data.position
-    }
-
-    saveToStorage();
-    document.getElementById('employee-cancel-btn').click();
-    renderEmployees(employeesForm);
-
-    if(editing){
-            showToast("Successfully saved changes!", true);
-        }else{
+        if(data.ok){
+            document.getElementById('employee-cancel-btn').click();
             showToast("Successfully added new employee!", true);
         }
-    editing = false;
+
+    }catch(err){
+
+    }
 }
 
-function editEmployee(id){
-    editing = true;
+async function saveEditEmployee(data){
+    const response = await fetch(`${server}/api/admin/saveemployeedits`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type' : 'application/json',
+                'Authorization' : `Bearer ${sessionStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify({
+                id: data.id,
+                employeeId: data.employeeId, 
+                position: data.position, 
+                deptId: parseInt(data.deptId), 
+                hireDate: data.hireDate})
+        }
+    )
 
-    const employee = window.db.employees.find(emp => emp.userId == id);
-    const department = window.db.departments.find(dept => dept.deptId == employee.deptId)
-    employeesForm.elements['id'].value = employee.id;
-    employeesForm.elements['email'].value = employee.email;
-    employeesForm.elements['position'].value = employee.position;
-    employeesForm.elements['deptId'].value = employee.deptId;
-    employeesForm.elements['hireDate'].value = employee.hireDate;
-    myEmployeeModal.show();
+    const resData = await response.json();
+
+    if(resData.ok){
+        document.getElementById('employee-cancel-btn').click();
+        showToast("Successfully added new employee!", true);
+        editing = false;  
+    }
+}
+
+async function editEmployee(id){
+    editing = true;
+    employeeEmailField.classList.add('hide-msg');
+    try{
+        const response = await fetch(`${server}/api/admin/getemployee?id=${encodeURIComponent(id)}`,
+            {
+                method: 'GET',
+                headers: getAuthHeader()
+            }
+        )
+        const data = await response.json();
+
+        const employee = data.employee;
+        console.log(employee)
+        employeesForm.elements['id'].value = employee.id;
+        employeesForm.elements['employeeId'].value = employee.employeeID;
+        employeesForm.elements['email'].value = employee.email;
+        employeesForm.elements['position'].value = employee.position;
+        employeesForm.elements['deptId'].value = employee.departmentId;
+       
+        employeesForm.elements['hireDate'].value =
+            new Date(employee.hireDate).toISOString().split('T')[0];
+        myEmployeeModal.show();
+    }catch(err){
+
+    }
+    
     
 }
 
-function deleteEmployee(id){
+
+async function deleteEmployee(id){
+    console.log(id)
     if(confirm('Are you sure you want to delete this employee?')){
-        const index = window.db.employees.findIndex(employee => employee.userId == id)
-        window.db.employees.splice(index, 1)
+       const response = await fetch(`${server}/api/admin/deleteemployee`,
+        {
+            method: 'DELETE',
+            headers: {
+                'Content-Type' : 'application/json',
+                'Authorization' : `Bearer ${sessionStorage.getItem('authToken')}`
+            },
+            body: JSON.stringify({id: parseInt(id)})
+        }
+       )
+
+       const data = await response.json();
+
+       if(response.ok){
+         showToast('Employee successfully deleted!')
+       }else{
+        showToast('Error in deleting student!', false)
+       }
     }
 
     renderEmployees();
@@ -825,49 +897,51 @@ async function renderEmployees(){
     const tbody = document.getElementById('employees-tbody');
     tbody.innerHTML =''
 
-    const response = await fetch(`${server}/api/admin/employees`, 
-        {
+    try {
+        const response = await fetch(`${server}/api/admin/employees`, {
             method: 'GET',
             headers: getAuthHeader()
-        }
-    )
+        });
 
-    const data = await response.json()
-    if(response.ok){
-        if(data.employees.length == 0){
-            const element = `
-                <tr>
-                <td colspan='5' class='text-center'>No employees found</td>  
-                </tr>
-            `;
+        const data = await response.json();
+        console.log("Data:", data);
+        if(response.ok){
+            if(data.employees.length == 0){
+                const element = `
+                    <tr>
+                    <td colspan='5' class='text-center'>No employees found</td>  
+                    </tr>
+                `;
 
-            tbody.innerHTML = element;
-            return true;
+                tbody.innerHTML = element;
+                return true;
+                
+            }
+            for(let employee of data.employees){
+                const element = `
+                    <tr>
+                        <td>${employee.employeeID}</td>
+                        <td>${employee.firstName} ${employee.lastName}</td>
+                        <td>${employee.position}</td?>
+                        <td>${employee.deptName}</td>
+                        <td>
+                            <button class="btn btn-outline-primary" onclick="editEmployee(${employee.id})">Edit</button>
+                            <button class="btn btn-outline-warning" onclick="deleteEmployee(${employee.id})">Delete</button>
+                        </td>
+                    </tr>
+                `
+
+                tbody.innerHTML += element
+            }
             
+            return true;
+        }else{
+            return false;
         }
-        for(let employee of data.employees){
-            const user = window.db.accounts.find(acc => acc.userId == employee.userId);
-            const department = window.db.departments.find(dept => dept.deptId == employee.deptId)
-            const element = `
-                <tr>
-                    <td>${employee.id}</td>
-                    <td>${user.firstName} ${user.lastName}</td>
-                    <td>${employee.position}</td?>
-                    <td>${department.name}</td>
-                    <td>
-                        <button class="btn btn-outline-primary" onclick="editEmployee(${employee.userId})">Edit</button>
-                        <button class="btn btn-outline-warning" onclick="deleteEmployee(${employee.userId})">Delete</button>
-                    </td>
-                </tr>
-            `
-
-            tbody.innerHTML += element
-        }
-        console.log('IM HERE')
-        return true;
-    }else{
-        return false;
+    } catch (err) {
+        console.error("Fetch error:", err);
     }
+   
     
 }
 

@@ -186,17 +186,22 @@ app.get('/api/admin/departments', authenticateToken, authorizeRole('admin'), asy
 })
 
 app.get('/api/admin/employees', authenticateToken, authorizeRole('admin'), async (req, res) => {
-    
-    try{
-        const [rows] = await db.query(
-            'SELECT * FROM employees'
-        )
+    try {
+        const [rows] = await db.query(`
+            SELECT e.*, a.firstName, a.lastName, a.email, d.name as deptName
+            FROM employees e
+            JOIN accounts a ON a.id = e.accountId
+            JOIN departments d ON e.departmentId = d.deptId
+            
+        `);
 
-        res.json({employees: rows})
-    }catch(err){
+        return res.status(200).json({ employees: rows });
 
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'Error fetching employees' });
     }
-})
+});
 
 app.get('/api/admin/accounts', authenticateToken, authorizeRole('admin'), async (req, res) => {
     
@@ -231,6 +236,7 @@ app.get('/api/admin/getaccount', authenticateToken, authorizeRole('admin'), asyn
         )
 
         if(rows.length > 0){
+            const user = rows[0]
             res.status(201).json({
                     exists: true, 
                     message: 'This email already exists', 
@@ -250,6 +256,18 @@ app.get('/api/admin/getaccount', authenticateToken, authorizeRole('admin'), asyn
 
        
 })
+
+app.get('/api/admin/getemployee', authenticateToken, authorizeRole('admin'), async (req, res) => {
+    const {id} = req.query;
+
+    const [rows] = await db.query(
+        'SELECT e.*, a.email FROM employees e JOIN accounts a ON a.id = e.accountId  WHERE e.id = ?',
+        [id]
+    )
+
+    res.status(200).json({employee: rows[0]})
+})
+
 
 
 
@@ -280,40 +298,72 @@ app.post('/api/admin/addaccount', authenticateToken, authorizeRole('admin'), asy
 })
 
 
-app.post('/api/admin/addemployee', authenticateToken, authorizeRole('admin'), (req, res) => {
-    const {employeeID, email, position, department, hireDate} = req.body;
+app.post('/api/admin/addemployee', authenticateToken, authorizeRole('admin'), async (req, res) => {
+    const {employeeId, email, position, deptId, hireDate} = req.body;
+    console.log(employeeId)
+    console.log(email)
 
-    //check if email exists in users
-    const user = users.find(u => u.email === email);
+    //check if email exists in user
 
-    if(user){
-        return res.status(401).json({error: 'Invalid credentials'});
-    }else{
-        const newEmployee = {
-            employeeID,
-            email,
-            position,
-            department, 
-            hireDate
+    try{
+        const [rows] = await db.query(
+            'SELECT * FROM accounts WHERE email = ?',
+            [email]
+        )
+
+        if(rows.length == 0){
+            return res.status(200).json({message: 'There is no account associated with this email', accountExists : false, employeeExists: false});
         }
 
-        employees.push(newEmployee);
-        res.status(201).json({message: 'New employee successfully added!'})
+        const [rows2] = await db.query(
+            'SELECT * FROM employees WHERE accountId = ?',
+            [rows[0].id]
+        )
+
+        if(rows2.length > 0){
+            return res.status(200).json({message: 'There is already an employee with this email', employeeExists : true, accountExists: true});
+        }
+
+        const [result] = await db.query(
+            'INSERT INTO employees (employeeID, accountId, position, departmentId, hireDate) values(?, ?, ?, ?, ?)',
+            [employeeId, rows[0].id, position, deptId, hireDate]
+        )
+
+        if(result.affectedRows == 0){
+            return res.status(404).json({message: 'Error saving account!', employeeExists: false, accountExists: false})
+        }
+            
+        res.status(201).json({message: 'New employee successfully added!',  employeeExists: false, accountExists: true})
+    }catch(err){
+        console.error(err)
     }
+    
+})
+
+app.post('/api/admin/addrequest', authenticateToken, async (req, res) => {
+    
 })
 
 
-
 // ============================== PUT REQUESTS =====================================
-// app.put('/api/admin/saveaccountedits', authenticateToken, authorizeRole('admin'), async (req, res) => {
-//     const {firstName, lastName, email, role, verified, editingEmail} = req.body;
+app.put('/api/admin/saveaccountedits', authenticateToken, authorizeRole('admin'), async (req, res) => {
+    const {firstName, lastName, email, role, verified, editingEmail} = req.body;
 
-//     try{
-//         const []
-//     }catch(err){
+    try{
+        const [result] = await db.query(
+            'UPDATE accounts SET firstName = ?, lastName = ?, email = ?, role = ?, verified = ? WHERE email = ?',
+            [firstName, lastName, email, role, verified, editingEmail]
+        )
 
-//     }
-// })
+        if( result.affectedRows === 0){
+            return res.status(404).json({message: 'Account not found!'})
+        }
+
+        return res.status(201).json({message: 'Successfully updated account!'})
+    }catch(err){
+
+    }
+})
 
 app.put('/api/admin/resetpassword', authenticateToken, authorizeRole('admin'), async (req, res) => {
     const {email, password} = req.body;
@@ -326,12 +376,42 @@ app.put('/api/admin/resetpassword', authenticateToken, authorizeRole('admin'), a
     res.json({message: 'Password successfully reset!'})
 })
 
+app.put('/api/admin/saveemployeedits', authenticateToken, authorizeRole('admin'), async (req, res) => {
+    const {id, employeeId, position, deptId, hireDate} = req.body
 
+    const [result] = await db.query(
+        'UPDATE accounts SET employeeID = ?, position = ?, deptId = ?, hireDate = ? WHERE id = ?',
+        [employeeId, position, deptId, hireDate, id]
+    )
+
+    if(result.affectedRows === 0){
+        res.status(404).json({message: 'Error saving edits!'});
+    }
+
+    res.status(201).json({message: 'Successfully saved edits!'})
+})
 
 
 // ============================= DELETE REQUESTS ================================
 
+app.delete('/api/admin/deleteemployee', authenticateToken, authorizeRole('admin'), async (req, res) => {
+    const {id} = req.body;
 
+    try{
+        const [result] = await db.query(
+            'DELETE FROM employees WHERE id = ?',
+            [id]
+        );
+
+        if(result.affectedRows > 0){
+            res.status(201).json({message: 'Employee successfully deleted.'})
+        }
+
+    }catch(err){
+        console.error(err)
+    }
+    
+})
 function authenticateToken(req, res, next){
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
